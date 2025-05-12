@@ -1,0 +1,47 @@
+Hey bro,
+
+So the overload problem from Kaspa syncing can be solved by not saving all headers on-chain.
+
+Instead, just store one Merkle root per batch (like per Canxium block or every X minutes), off-chain. Then miners submit only proofs (Merkle branch) to prove their Kaspa block is valid and was included.
+
+I made a quick Solidity example where you store a Merkle root and verify block inclusion via a Merkle proof. It saves space and still keeps trustless validation. All the heavy stuff (Kaspa block scanning, hash aggregation) stays off-chain. You only store the compact root and validate proofs if needed.
+
+If you want, I can send a Python script to generate Merkle proofs and hashes too.
+
+Lmk 👇
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract KaspaMerkleRootVerifier {
+    // Mapping block => Merkle Root
+    mapping(uint256 => bytes32) public kaspaMerkleRoots;
+
+    // Submit the Merkle root for a batch of Kaspa headers
+    function submitKaspaMerkleRoot(uint256 canxiumBlockNumber, bytes32 merkleRoot) external {
+        require(kaspaMerkleRoots[canxiumBlockNumber] == bytes32(0), "Root already submitted");
+        kaspaMerkleRoots[canxiumBlockNumber] = merkleRoot;
+    }
+
+    // Verify a Kaspa block hash is part of the Merkle tree
+    function verifyKaspaBlockHash(
+        uint256 canxiumBlockNumber,
+        bytes32[] memory proof,
+        uint256 index,
+        bytes32 leafHash
+    ) public view returns (bool) {
+        bytes32 hash = leafHash;
+        for (uint256 i = 0; i < proof.length; i++) {
+            if (index % 2 == 0) {
+                hash = keccak256(abi.encodePacked(hash, proof[i]));
+            } else {
+                hash = keccak256(abi.encodePacked(proof[i], hash));
+            }
+            index /= 2;
+        }
+        return hash == kaspaMerkleRoots[canxiumBlockNumber];
+    }
+}
+
+
+That's just an example and it won't probably work, just for the idea, if you agree with it let's test it on testnet
